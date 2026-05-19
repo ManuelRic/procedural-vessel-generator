@@ -153,9 +153,15 @@ function logMeasurements(bounds, buildInfo = {}) {
     containerCountAcross: buildInfo.containerCountAcross,
     containerCountLong: buildInfo.containerCountLong,
     containerLevels: buildInfo.containerLevels,
+    fillModel: buildInfo.fillModel,
+    fillCountAcross: buildInfo.fillCountAcross,
+    fillCountLong: buildInfo.fillCountLong,
+    fillLevels: buildInfo.fillLevels,
     bridgeLimitHeight: buildInfo.bridgeLimitHeight?.toFixed(2),
     scaledBridgeViewClearance: buildInfo.scaledBridgeViewClearance?.toFixed(2),
     availableContainerHeight: buildInfo.availableContainerHeight?.toFixed(2),
+    fillBlockLength: buildInfo.fillBlockLength?.toFixed(2),
+    fillBlockWidth: buildInfo.fillBlockWidth?.toFixed(2),
     containerBlockLength: buildInfo.containerBlockLength?.toFixed(2),
     containerBlockWidth: buildInfo.containerBlockWidth?.toFixed(2)
   });
@@ -190,8 +196,8 @@ function tintModel(model, color) {
 
 
 // Ship parameters
-const totalLength = 366;
-const totalWidth = 51;
+const totalLength = 400;
+const totalWidth = 64;
 
 const sternOverlap = 3;
 
@@ -208,6 +214,31 @@ const containerColors = [
   0x43a047,
   0xff8f00
 ];
+const shipFillModel = "crane";
+const fillModels = {
+  container: {
+    path: "/models/container.glb",
+    scalesWithShip: false,
+    scale: 1,
+    targetWidth: containerWidth,
+    spacing: containerSpacing,
+    yOffset: containerYOffset,
+    stackToBridge: true,
+    randomColors: containerColors
+  },
+  crane: {
+    path: "/models/crane.glb",
+    scalesWithShip: false,
+    scale: 2,
+    spacing: 30,
+    yOffset: -1,
+    xOffset: 5,
+    zOffset: 20,
+    alternateFacingSides: true,
+    facingRotationY: 0,
+    stackToBridge: false
+  }
+};
 const showMeasurementGuides = true;
 
 
@@ -219,7 +250,11 @@ async function generateShip() {
 
   const sternModel = await loadModel("/models/sections/cargo_ship_01_stern.glb");
 
-  const containerModel = await loadModel("/models/container.glb");
+  const selectedFillModel = fillModels[shipFillModel] ? shipFillModel : "container";
+
+  const fillConfig = fillModels[selectedFillModel];
+
+  const fillModel = await loadModel(fillConfig.path);
 
 
   const ship = new THREE.Group();
@@ -236,21 +271,41 @@ async function generateShip() {
 
   const sternBounds = getBoundsInfo(sternModel);
 
-  const containerBounds = getBoundsInfo(containerModel);
+  const fillBounds = getBoundsInfo(fillModel);
 
   const cargoLength = Math.abs(cargoEdges.farX - cargoEdges.connectorX);
 
   const cargoWidth = cargoBounds.size.z;
 
-  const containerScale = containerWidth / containerBounds.size.z;
-
-  const containerLength = containerBounds.size.x * containerScale;
-
-  const containerHeight = containerBounds.size.y * containerScale;
-
   const cargoDirection = Math.sign(cargoEdges.farX - cargoEdges.connectorX);
 
   const shipScale = totalWidth / cargoWidth;
+
+  const fillBaseScale = fillConfig.scalesWithShip
+    ? shipScale
+    : fillConfig.targetWidth
+      ? fillConfig.targetWidth / fillBounds.size.z
+      : 1;
+
+  const fillScale = fillBaseScale * (fillConfig.scale ?? 1);
+
+  const fillLength = fillBounds.size.x * fillScale;
+
+  const fillWidth = fillBounds.size.z * fillScale;
+
+  const fillHeight = fillBounds.size.y * fillScale;
+
+  const fillSpacing = fillConfig.scalesWithShip ? fillConfig.spacing * shipScale : fillConfig.spacing;
+
+  const fillYOffset = fillConfig.scalesWithShip ? fillConfig.yOffset * shipScale : fillConfig.yOffset;
+
+  const fillXOffsetValue = fillConfig.xOffset ?? 0;
+
+  const fillZOffsetValue = fillConfig.zOffset ?? 0;
+
+  const fillXOffset = fillConfig.scalesWithShip ? fillXOffsetValue * shipScale : fillXOffsetValue;
+
+  const fillZOffset = fillConfig.scalesWithShip ? fillZOffsetValue * shipScale : fillZOffsetValue;
 
   const scaledCargoLength = cargoLength * shipScale;
 
@@ -338,51 +393,65 @@ async function generateShip() {
 
   const bridgeLimitHeight = bridgeBounds.max.y - scaledBridgeViewClearance;
 
-  const availableContainerHeight = bridgeLimitHeight - cargoDeckBounds.max.y - containerYOffset;
+  const availableFillHeight = bridgeLimitHeight - cargoDeckBounds.max.y - fillYOffset;
 
-  const containerLevels = Math.max(0, Math.floor(availableContainerHeight / containerHeight));
+  const fillLevels = fillConfig.stackToBridge
+    ? Math.max(0, Math.floor(availableFillHeight / fillHeight))
+    : 1;
 
-  const containerStepX = containerLength + containerSpacing;
+  const fillStepX = fillLength + fillSpacing;
 
-  const containerStepZ = containerWidth + containerSpacing;
+  const fillStepZ = fillWidth + fillSpacing;
 
-  const containerCountLong = Math.max(1, Math.floor((cargoDeckSize.x + containerSpacing) / containerStepX));
+  const fillCountLong = Math.max(1, Math.floor((cargoDeckSize.x + fillSpacing) / fillStepX));
 
-  const containerCountAcross = Math.max(1, Math.floor((cargoDeckSize.z + containerSpacing) / containerStepZ));
+  const fillCountAcross = Math.max(1, Math.floor((cargoDeckSize.z + fillSpacing) / fillStepZ));
 
-  const containerBlockLength = containerCountLong * containerLength + (containerCountLong - 1) * containerSpacing;
+  const fillBlockLength = fillCountLong * fillLength + (fillCountLong - 1) * fillSpacing;
 
-  const containerBlockWidth = containerCountAcross * containerWidth + (containerCountAcross - 1) * containerSpacing;
+  const fillBlockWidth = fillCountAcross * fillWidth + (fillCountAcross - 1) * fillSpacing;
 
-  const containerStartX = cargoDeckBounds.min.x + (cargoDeckSize.x - containerBlockLength) / 2 + containerLength / 2;
+  const fillStartX = cargoDeckBounds.min.x + (cargoDeckSize.x - fillBlockLength) / 2 + fillLength / 2;
 
-  const containerStartZ = cargoDeckBounds.min.z + (cargoDeckSize.z - containerBlockWidth) / 2 + containerWidth / 2;
+  const fillStartZ = cargoDeckBounds.min.z + (cargoDeckSize.z - fillBlockWidth) / 2 + fillWidth / 2;
 
-  for(let level = 0; level < containerLevels; level++) {
+  for(let level = 0; level < fillLevels; level++) {
 
-    for(let i = 0; i < containerCountLong; i++) {
+    for(let i = 0; i < fillCountLong; i++) {
 
-      for(let j = 0; j < containerCountAcross; j++) {
+      for(let j = 0; j < fillCountAcross; j++) {
 
-        const container = containerModel.clone(true);
+        const fill = fillModel.clone(true);
 
-        const containerColor = containerColors[Math.floor(Math.random() * containerColors.length)];
+        const fillCenterX = fillStartX + i * fillStepX + fillXOffset;
 
-        const containerCenterX = containerStartX + i * containerStepX;
+        const fillCenterZ = fillStartZ + j * fillStepZ + fillZOffset;
 
-        const containerCenterZ = containerStartZ + j * containerStepZ;
+        fill.scale.setScalar(fillScale);
 
-        container.scale.setScalar(containerScale);
+        if(fillConfig.alternateFacingSides) {
 
-        tintModel(container, containerColor);
+          const fillIndex = i * fillCountAcross + j;
 
-        container.position.x = containerCenterX - containerBounds.center.x * containerScale;
+          fill.rotation.y = (fillConfig.facingRotationY ?? 0) + (fillIndex % 2 === 0 ? 0 : Math.PI);
 
-        container.position.y = cargoDeckBounds.max.y - containerBounds.bounds.min.y * containerScale + containerYOffset + level * containerHeight;
+        }
 
-        container.position.z = containerCenterZ - containerBounds.center.z * containerScale;
+        if(fillConfig.randomColors) {
 
-        ship.add(container);
+          const fillColor = fillConfig.randomColors[Math.floor(Math.random() * fillConfig.randomColors.length)];
+
+          tintModel(fill, fillColor);
+
+        }
+
+        fill.position.x = fillCenterX - fillBounds.center.x * fillScale;
+
+        fill.position.y = cargoDeckBounds.max.y - fillBounds.bounds.min.y * fillScale + fillYOffset + level * fillHeight;
+
+        fill.position.z = fillCenterZ - fillBounds.center.z * fillScale;
+
+        ship.add(fill);
       }
     }
   }
@@ -400,15 +469,21 @@ async function generateShip() {
     scaledCargoLength,
     scaledSternLength,
     cargoRunLength,
-    containerCountAcross,
-    containerCountLong,
-    containerLevels,
+    containerCountAcross: selectedFillModel === "container" ? fillCountAcross : undefined,
+    containerCountLong: selectedFillModel === "container" ? fillCountLong : undefined,
+    containerLevels: selectedFillModel === "container" ? fillLevels : undefined,
+    fillModel: selectedFillModel,
+    fillCountAcross,
+    fillCountLong,
+    fillLevels,
     bridgeLimitHeight,
     scaledBridgeViewClearance,
-    availableContainerHeight,
+    availableContainerHeight: selectedFillModel === "container" ? availableFillHeight : undefined,
     targetHeight,
-    containerBlockLength,
-    containerBlockWidth
+    fillBlockLength,
+    fillBlockWidth,
+    containerBlockLength: selectedFillModel === "container" ? fillBlockLength : undefined,
+    containerBlockWidth: selectedFillModel === "container" ? fillBlockWidth : undefined
   });
 
   if(showMeasurementGuides) {
