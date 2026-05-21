@@ -150,6 +150,7 @@ function logMeasurements(bounds, buildInfo = {}) {
     scaledCargoLength: buildInfo.scaledCargoLength?.toFixed(2),
     scaledSternLength: buildInfo.scaledSternLength?.toFixed(2),
     cargoRunLength: buildInfo.cargoRunLength?.toFixed(2),
+    lengthCorrectionScale: buildInfo.lengthCorrectionScale?.toFixed(5),
     containerCountAcross: buildInfo.containerCountAcross,
     containerCountLong: buildInfo.containerCountLong,
     containerLevels: buildInfo.containerLevels,
@@ -165,6 +166,34 @@ function logMeasurements(bounds, buildInfo = {}) {
     containerBlockLength: buildInfo.containerBlockLength?.toFixed(2),
     containerBlockWidth: buildInfo.containerBlockWidth?.toFixed(2)
   });
+
+}
+
+function fitShipLength(ship, targetLength) {
+
+  const bounds = new THREE.Box3().setFromObject(ship);
+
+  const size = bounds.getSize(new THREE.Vector3());
+
+  if(size.x === 0) {
+
+    return 1;
+
+  }
+
+  const centerX = bounds.getCenter(new THREE.Vector3()).x;
+
+  const lengthCorrectionScale = targetLength / size.x;
+
+  ship.scale.x *= lengthCorrectionScale;
+
+  const correctedBounds = new THREE.Box3().setFromObject(ship);
+
+  const correctedCenterX = correctedBounds.getCenter(new THREE.Vector3()).x;
+
+  ship.position.x += centerX - correctedCenterX;
+
+  return lengthCorrectionScale;
 
 }
 
@@ -214,7 +243,7 @@ const containerColors = [
   0x43a047,
   0xff8f00
 ];
-const shipFillModel = "crane";
+const shipFillModel = "container";
 const fillModels = {
   container: {
     path: "/models/container.glb",
@@ -456,6 +485,8 @@ async function generateShip() {
     }
   }
 
+  const lengthCorrectionScale = fitShipLength(ship, totalLength);
+
   scene.add(ship);
 
 
@@ -469,6 +500,7 @@ async function generateShip() {
     scaledCargoLength,
     scaledSternLength,
     cargoRunLength,
+    lengthCorrectionScale,
     containerCountAcross: selectedFillModel === "container" ? fillCountAcross : undefined,
     containerCountLong: selectedFillModel === "container" ? fillCountLong : undefined,
     containerLevels: selectedFillModel === "container" ? fillLevels : undefined,
