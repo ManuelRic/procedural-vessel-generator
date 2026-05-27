@@ -225,8 +225,8 @@ function tintModel(model, color) {
 
 
 // Ship parameters
-const totalLength = 400;
-const totalWidth = 64;
+const totalLength = 600;
+const totalWidth = 34;
 
 const sternOverlap = 3;
 
